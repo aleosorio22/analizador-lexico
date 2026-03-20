@@ -8,7 +8,7 @@ Visualizador interactivo de un analizador léxico desarrollado para la materia *
 
 ## ¿Qué es un analizador léxico?
 
-El analizador lexico es la **primera fase de un compilador**. Su tarea es leer el código fuente carácter por carácter y agruparlos en unidades con significado llamadas **tokens** (palabras reservadas, identificadores, operadores, etc.), que luego serán procesados por el analizador sintáctico.
+El analizador léxico es la **primera fase de un compilador**. Su tarea es leer el código fuente carácter por carácter y agruparlos en unidades con significado llamadas **tokens** (palabras reservadas, identificadores, operadores, etc.), que luego serán procesados por el analizador sintáctico.
 
 ---
 
