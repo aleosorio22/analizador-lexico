@@ -49,12 +49,58 @@ const ASDFG_PERMS = new Set(
 export const RESERVED_WORDS  = new Set([...BASE_RESERVED, ...ASDFG_PERMS])
 export const ASDFG_PERMS_COUNT = ASDFG_PERMS.size
 
-const ARITHMETIC_OPS = new Set(['+', '-', '*', '/'])
-const SYMBOLS_SET    = new Set(['{', '}', '[', ']', '(', ')', ',', ';'])
+// ================================================================
+//  Clase AnalizadorLexico — implementación con Expresiones Regulares
+//
+//  Estrategia: lista de reglas (regex + acción) en orden de
+//  prioridad. En cada posición se prueba cada regex desde el
+//  inicio del texto restante (^). La primera que coincide gana.
+// ================================================================
 
-// ================================================================
-//  Clase AnalizadorLexico
-// ================================================================
+// Reglas definidas en orden de prioridad
+// Cada regla tiene:
+//   re  → la expresión regular (siempre ancla al inicio con ^)
+//   tag → qué hacer cuando coincide
+//   type→ tipo de token resultante (para reglas simples)
+const RULES = [
+  // ── 1. Ignorar: blancos y comentarios ───────────────────────
+  { tag: 'skip',    re: /^[ \t\r\n]+/          },  // espacios y saltos de línea
+  { tag: 'skip',    re: /^\/\/[^\n]*/           },  // comentario de línea: //
+  { tag: 'skip',    re: /^#[^\n]*/              },  // comentario de línea: #
+  { tag: 'skip',    re: /^\/\*[\s\S]*?\*\//     },  // comentario de bloque: /* */
+
+  // ── 2. Operadores de 2 chars (ANTES que los de 1 char) ──────
+  //    Si no van primero, ">=" se tokenizaría como ">" + "="
+  { tag: 'token',   re: /^:=/,    type: TK.ASSIGN  },
+  { tag: 'token',   re: /^(>=|<=|<>)/, type: TK.REL_OP  },
+  { tag: 'token',   re: /^\.\./,  type: TK.SYMBOL  },
+
+  // ── 3. Operadores de 1 char ───────────────────────────────────
+  { tag: 'token',   re: /^[><]/,  type: TK.REL_OP  },
+  { tag: 'token',   re: /^=/,     type: TK.REL_OP  },
+  { tag: 'token',   re: /^[+\-*\/]/, type: TK.ARITH_OP },
+  { tag: 'token',   re: /^[{}\[\](),;]/, type: TK.SYMBOL },
+
+  // ── 4. Cadenas (primero la cerrada, luego sin cerrar = error) ─
+  //    El grupo 1 captura el contenido SIN las comillas
+  { tag: 'string',  re: /^"([^"\n]*)"/ },
+  { tag: 'string',  re: /^'([^'\n]*)'/ },
+  { tag: 'strErr',  re: /^"[^"\n]*/    },  // abrió " pero no cerró
+  { tag: 'strErr',  re: /^'[^'\n]*/    },  // abrió ' pero no cerró
+
+  // ── 5. Números (validación de rango 0-100 después del match) ──
+  { tag: 'number',  re: /^\d+/ },
+
+  // ── 6. Palabras (validación de longitud y reservadas después) ─
+  //    Coincide letras + dígitos (la letra inicial la garantiza
+  //    que este patrón no matchea si empieza por dígito, ya que
+  //    la regla de número viene antes)
+  { tag: 'word',    re: /^[a-zA-ZáéíóúÁÉÍÓÚñÑ][a-zA-ZáéíóúÁÉÍÓÚñÑ0-9]*/ },
+
+  // ── 7. Carácter no reconocido (siempre coincide como fallback) ─
+  { tag: 'unknown', re: /^[\s\S]/ },
+]
+
 class AnalizadorLexico {
   constructor(source) {
     this.src    = source
@@ -63,157 +109,87 @@ class AnalizadorLexico {
     this.tokens = []
   }
 
-  // ── Acceso al texto ────────────────────────────────────────────
-  _ch()               { return this.pos < this.src.length ? this.src[this.pos]              : null }
-  _peek(offset = 1)   { const p = this.pos + offset; return p < this.src.length ? this.src[p] : null }
-  _advance() {
-    const ch = this.src[this.pos]
-    if (ch === '\n') this.line++
-    this.pos++
-    return ch
+  // Avanza `len` caracteres contando saltos de línea para el reporte
+  _consume(len) {
+    const chunk = this.src.slice(this.pos, this.pos + len)
+    this.line += (chunk.match(/\n/g) || []).length
+    this.pos  += len
   }
 
-  _add(type, value, startPos) {
+  _push(type, value, startPos) {
     this.tokens.push({ type, value: String(value), line: this.line, startPos, endPos: this.pos })
   }
-
-  // ── Saltar espacios en blanco y comentarios ────────────────────
-  _skipBlanks() {
-    while (this._ch() !== null) {
-      const ch = this._ch()
-
-      // Espacios en blanco
-      if (' \t\r\n'.includes(ch)) { this._advance(); continue }
-
-      // Comentario de línea: // ó #
-      if ((ch === '/' && this._peek() === '/') || ch === '#') {
-        while (this._ch() !== null && this._ch() !== '\n') this._advance()
-        continue
-      }
-
-      // Comentario de bloque: /* ... */
-      if (ch === '/' && this._peek() === '*') {
-        this._advance(); this._advance()
-        while (this._ch() !== null) {
-          if (this._ch() === '*' && this._peek() === '/') { this._advance(); this._advance(); break }
-          this._advance()
-        }
-        continue
-      }
-
-      break
-    }
-  }
-
-  // ── Lectura de tokens ──────────────────────────────────────────
-
-  _readWord(startPos) {
-    let word = ''
-    while (this._ch() !== null && (this._isLetter(this._ch()) || this._isDigit(this._ch())))
-      word += this._advance()
-
-    if (word.length > 10) {
-      this._add(TK.ERROR, `identificador demasiado largo (${word.length} chars): "${word}"`, startPos)
-      return
-    }
-
-    const lower = word.toLowerCase()
-    if (BASE_RESERVED.has(lower)) { this._add(TK.RESERVED, lower, startPos); return }
-    if (ASDFG_PERMS.has(word))    { this._add(TK.RESERVED, word,  startPos); return }
-    this._add(TK.IDENTIFIER, word, startPos)
-  }
-
-  _readNumber(startPos) {
-    let num = ''
-    while (this._ch() !== null && this._isDigit(this._ch())) num += this._advance()
-    const val = parseInt(num, 10)
-    if (val >= 0 && val <= 100) this._add(TK.INTEGER, num, startPos)
-    else this._add(TK.ERROR, `número fuera de rango 0–100: ${num}`, startPos)
-  }
-
-  _readString(startPos) {
-    const quote = this._advance()
-    let content = ''
-    while (this._ch() !== null) {
-      const ch = this._ch()
-      if (ch === quote)  { this._advance(); this._add(TK.STRING, content, startPos); return }
-      if (ch === '\n')   break
-      content += this._advance()
-    }
-    this._add(TK.ERROR, `cadena sin cerrar: ${quote}${content}`, startPos)
-  }
-
-  _isLetter(ch) { return /[a-zA-ZáéíóúÁÉÍÓÚñÑ_]/.test(ch) }
-  _isDigit(ch)  { return /[0-9]/.test(ch) }
 
   // ── Tokenización principal ─────────────────────────────────────
   analyze() {
     while (this.pos < this.src.length) {
-      this._skipBlanks()
-      if (this.pos >= this.src.length) break
 
-      const startPos = this.pos
-      const ch = this._ch()
+      const rest  = this.src.slice(this.pos)  // texto que falta procesar
+      const start = this.pos
 
-      // Cadenas
-      if (ch === '"' || ch === "'") { this._readString(startPos); continue }
+      for (const rule of RULES) {
+        const m = rest.match(rule.re)
+        if (!m) continue                        // esta regex no coincide, probar la siguiente
 
-      // Palabras
-      if (this._isLetter(ch)) { this._readWord(startPos); continue }
+        const raw = m[0]                        // texto que coincidió
 
-      // Números
-      if (this._isDigit(ch)) { this._readNumber(startPos); continue }
+        switch (rule.tag) {
 
-      // Operadores aritméticos (el '/' que llegue aquí no es comentario)
-      if (ARITHMETIC_OPS.has(ch)) {
-        this._add(TK.ARITH_OP, ch, startPos); this._advance(); continue
-      }
+          case 'skip':
+            // Blancos y comentarios: consumir sin emitir token
+            this._consume(raw.length)
+            break
 
-      // Asignación :=
-      if (ch === ':') {
-        if (this._peek() === '=') {
-          this._advance(); this._advance()
-          this._add(TK.ASSIGN, ':=', startPos)
-        } else {
-          this._add(TK.ERROR, `carácter inesperado: '${ch}'`, startPos); this._advance()
+          case 'token':
+            // Token simple: el valor es exactamente lo que coincidió
+            this._consume(raw.length)
+            this._push(rule.type, raw, start)
+            break
+
+          case 'string':
+            // m[1] = contenido entre las comillas (grupo de captura)
+            this._consume(raw.length)
+            this._push(TK.STRING, m[1], start)
+            break
+
+          case 'strErr':
+            // La regex coincidió con una apertura de comilla sin cierre
+            this._consume(raw.length)
+            this._push(TK.ERROR, `cadena sin cerrar: ${raw}`, start)
+            break
+
+          case 'number': {
+            const val = parseInt(raw, 10)
+            this._consume(raw.length)
+            if (val >= 0 && val <= 100)
+              this._push(TK.INTEGER, raw, start)
+            else
+              this._push(TK.ERROR, `número fuera de rango 0–100: ${raw}`, start)
+            break
+          }
+
+          case 'word': {
+            this._consume(raw.length)
+            if (raw.length > 10) {
+              this._push(TK.ERROR, `identificador demasiado largo (${raw.length} chars): "${raw}"`, start)
+            } else if (BASE_RESERVED.has(raw.toLowerCase())) {
+              this._push(TK.RESERVED, raw.toLowerCase(), start)
+            } else if (ASDFG_PERMS.has(raw)) {
+              this._push(TK.RESERVED, raw, start)
+            } else {
+              this._push(TK.IDENTIFIER, raw, start)
+            }
+            break
+          }
+
+          case 'unknown':
+            this._consume(1)
+            this._push(TK.ERROR, `carácter no reconocido: '${raw}'`, start)
+            break
         }
-        continue
+
+        break  // regla aplicada → pasar a la siguiente posición
       }
-
-      // < <= <>
-      if (ch === '<') {
-        const nxt = this._peek()
-        if (nxt === '=') { this._advance(); this._advance(); this._add(TK.REL_OP, '<=', startPos) }
-        else if (nxt === '>') { this._advance(); this._advance(); this._add(TK.REL_OP, '<>', startPos) }
-        else { this._advance(); this._add(TK.REL_OP, '<', startPos) }
-        continue
-      }
-
-      // > >=
-      if (ch === '>') {
-        if (this._peek() === '=') { this._advance(); this._advance(); this._add(TK.REL_OP, '>=', startPos) }
-        else { this._advance(); this._add(TK.REL_OP, '>', startPos) }
-        continue
-      }
-
-      // =
-      if (ch === '=') { this._advance(); this._add(TK.REL_OP, '=', startPos); continue }
-
-      // ..
-      if (ch === '.') {
-        if (this._peek() === '.') {
-          this._advance(); this._advance(); this._add(TK.SYMBOL, '..', startPos)
-        } else {
-          this._add(TK.ERROR, `carácter inesperado: '${ch}' (¿quiso escribir '..'?)`, startPos); this._advance()
-        }
-        continue
-      }
-
-      // Símbolos delimitadores
-      if (SYMBOLS_SET.has(ch)) { this._add(TK.SYMBOL, ch, startPos); this._advance(); continue }
-
-      // Carácter no reconocido
-      this._add(TK.ERROR, `carácter no reconocido: '${ch}'`, startPos); this._advance()
     }
 
     return this.tokens

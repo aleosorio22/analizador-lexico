@@ -1,0 +1,1106 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Informe — Analizador Léxico</title>
+  <style>
+    /* ── Reset y base ─────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Georgia', serif;
+      font-size: 11pt;
+      line-height: 1.7;
+      color: #1a1a1a;
+      background: #f0f0f0;
+    }
+
+    /* ── Página ───────────────────────────────────────────────── */
+    .page {
+      width: 210mm;
+      min-height: 297mm;
+      margin: 20px auto;
+      background: #fff;
+      padding: 22mm 22mm 20mm 22mm;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.15);
+    }
+
+    /* ── PORTADA ──────────────────────────────────────────────── */
+    .cover {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 253mm;
+      text-align: center;
+      gap: 0;
+    }
+
+    .cover-logo {
+      margin-bottom: 32px;
+    }
+    .cover-logo svg { width: 80px; height: 80px; }
+
+    .cover-university {
+      font-size: 11pt;
+      color: #555;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 6px;
+    }
+    .cover-course {
+      font-size: 12pt;
+      color: #333;
+      margin-bottom: 48px;
+    }
+
+    .cover-title {
+      font-size: 26pt;
+      font-weight: bold;
+      color: #1a1a2e;
+      line-height: 1.2;
+      margin-bottom: 12px;
+    }
+    .cover-subtitle {
+      font-size: 13pt;
+      color: #555;
+      margin-bottom: 56px;
+    }
+
+    .cover-divider {
+      width: 60px;
+      height: 3px;
+      background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+      border-radius: 2px;
+      margin: 0 auto 56px;
+    }
+
+    .cover-links {
+      margin-bottom: 56px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      align-items: center;
+    }
+    .cover-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 20px;
+      border-radius: 6px;
+      font-family: 'Courier New', monospace;
+      font-size: 10pt;
+      text-decoration: none;
+      border: 1px solid;
+    }
+    .cover-link.repo  { color: #1d4ed8; border-color: #93c5fd; background: #eff6ff; }
+    .cover-link.demo  { color: #065f46; border-color: #6ee7b7; background: #ecfdf5; }
+
+    .cover-meta {
+      margin-top: auto;
+      text-align: center;
+    }
+    .cover-meta table {
+      margin: 0 auto;
+      border-collapse: collapse;
+    }
+    .cover-meta td {
+      padding: 4px 16px;
+      font-size: 10.5pt;
+      color: #444;
+    }
+    .cover-meta td:first-child {
+      text-align: right;
+      font-weight: bold;
+      color: #222;
+      border-right: 2px solid #e5e7eb;
+    }
+
+    /* ── Índice ───────────────────────────────────────────────── */
+    .toc-title {
+      font-size: 16pt;
+      font-weight: bold;
+      color: #1a1a2e;
+      border-bottom: 2px solid #3b82f6;
+      padding-bottom: 6px;
+      margin-bottom: 24px;
+    }
+    .toc-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .toc-list li {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 8px;
+    }
+    .toc-list li::after {
+      content: '';
+      flex: 1;
+      border-bottom: 1px dotted #ccc;
+      margin: 0 6px;
+    }
+    .toc-list a { color: #1d4ed8; text-decoration: none; }
+    .toc-list span { color: #888; font-size: 10pt; white-space: nowrap; }
+
+    .toc-section { margin-top: 14px; }
+    .toc-section-title { font-weight: bold; color: #333; margin-bottom: 6px; font-size: 10.5pt; }
+
+    /* ── Contenido general ────────────────────────────────────── */
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid #e5e7eb;
+    }
+    .section-number {
+      background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+      color: #fff;
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13pt;
+      font-weight: bold;
+      font-family: sans-serif;
+      flex-shrink: 0;
+    }
+    .section-title {
+      font-size: 16pt;
+      font-weight: bold;
+      color: #1a1a2e;
+    }
+
+    h3 {
+      font-size: 12pt;
+      font-weight: bold;
+      color: #1e3a5f;
+      margin: 20px 0 8px;
+    }
+
+    p { margin-bottom: 10px; }
+
+    ul, ol {
+      padding-left: 24px;
+      margin-bottom: 12px;
+    }
+    li { margin-bottom: 4px; }
+
+    /* ── Tablas ───────────────────────────────────────────────── */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 14px 0;
+      font-size: 10pt;
+    }
+    thead tr { background: #1a1a2e; color: #fff; }
+    thead th { padding: 9px 12px; text-align: left; font-weight: 600; }
+    tbody tr:nth-child(even) { background: #f8fafc; }
+    tbody td { padding: 8px 12px; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
+
+    /* ── Código ───────────────────────────────────────────────── */
+    pre, code {
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 9.5pt;
+    }
+    pre {
+      background: #0d1117;
+      color: #c9d1d9;
+      border-radius: 6px;
+      padding: 14px 16px;
+      overflow-x: auto;
+      margin: 12px 0;
+      line-height: 1.5;
+    }
+    code {
+      background: #f1f5f9;
+      color: #be185d;
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-size: 9.5pt;
+    }
+    pre code { background: none; color: inherit; padding: 0; }
+
+    /* Colores de sintaxis en bloques de código */
+    .kw  { color: #ff7b72; }  /* keywords */
+    .fn  { color: #d2a8ff; }  /* functions */
+    .str { color: #a5d6ff; }  /* strings */
+    .cm  { color: #8b949e; font-style: italic; } /* comments */
+    .nb  { color: #79c0ff; }  /* built-ins */
+    .op  { color: #ffa657; }  /* operators */
+    .var { color: #e6edf3; }  /* variables */
+
+    /* ── Callouts ─────────────────────────────────────────────── */
+    .callout {
+      padding: 10px 14px;
+      border-radius: 6px;
+      border-left: 4px solid;
+      margin: 14px 0;
+      font-size: 10.5pt;
+    }
+    .callout.info    { background: #eff6ff; border-color: #3b82f6; color: #1e40af; }
+    .callout.success { background: #f0fdf4; border-color: #22c55e; color: #14532d; }
+    .callout.warning { background: #fefce8; border-color: #eab308; color: #713f12; }
+
+    /* ── Capturas de pantalla ─────────────────────────────────── */
+    .screenshot {
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      overflow: hidden;
+      margin: 16px 0;
+    }
+    .screenshot img {
+      width: 100%;
+      display: block;
+    }
+    .screenshot-placeholder {
+      background: #f8fafc;
+      border: 2px dashed #cbd5e1;
+      border-radius: 6px;
+      padding: 32px;
+      text-align: center;
+      margin: 16px 0;
+      color: #94a3b8;
+    }
+    .screenshot-placeholder p { color: #64748b; margin: 0; font-size: 10pt; }
+    .screenshot-caption {
+      font-size: 9.5pt;
+      color: #64748b;
+      text-align: center;
+      margin-top: -10px;
+      margin-bottom: 14px;
+      font-style: italic;
+    }
+
+    /* ── Badges de token ──────────────────────────────────────── */
+    .token-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 9pt;
+      font-weight: 600;
+      font-family: sans-serif;
+      white-space: nowrap;
+      color: #fff;
+    }
+    .tk-res  { background: #8b5cf6; }
+    .tk-id   { background: #3b82f6; }
+    .tk-int  { background: #10b981; }
+    .tk-str  { background: #f59e0b; }
+    .tk-ari  { background: #f97316; }
+    .tk-asn  { background: #6366f1; }
+    .tk-rel  { background: #06b6d4; }
+    .tk-sym  { background: #64748b; }
+    .tk-err  { background: #ef4444; }
+
+    /* ── Diagrama de flujo simple ─────────────────────────────── */
+    .flow {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+      margin: 20px 0;
+      flex-wrap: wrap;
+    }
+    .flow-box {
+      background: #1a1a2e;
+      color: #e6edf3;
+      padding: 10px 16px;
+      border-radius: 6px;
+      font-size: 10pt;
+      font-family: sans-serif;
+      text-align: center;
+      min-width: 100px;
+    }
+    .flow-arrow {
+      font-size: 18pt;
+      color: #3b82f6;
+      padding: 0 6px;
+    }
+
+    /* ── Saltos de página ─────────────────────────────────────── */
+    .page-break { page-break-after: always; }
+
+    /* ── Separador de sección ─────────────────────────────────── */
+    .section-gap { margin-bottom: 36px; }
+
+    /* ── Print ────────────────────────────────────────────────── */
+    @media print {
+      body { background: white; font-size: 10.5pt; }
+      .page {
+        width: 100%;
+        margin: 0;
+        padding: 15mm 18mm;
+        box-shadow: none;
+      }
+      .no-print { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════════════════════
+     BOTÓN IMPRIMIR (solo en pantalla)
+     ════════════════════════════════════════════════════════════ -->
+<div class="no-print" style="text-align:center; padding: 16px; background:#1a1a2e;">
+  <button
+    onclick="window.print()"
+    style="background:#3b82f6;color:#fff;border:none;padding:10px 28px;border-radius:6px;
+           font-size:13pt;cursor:pointer;font-weight:600;">
+    🖨️ Guardar / Imprimir como PDF
+  </button>
+  <span style="color:#8b949e;font-size:10pt;display:block;margin-top:6px;">
+    Ctrl+P → Cambiar destino a "Guardar como PDF"
+  </span>
+</div>
+
+
+<!-- ════════════════════════════════════════════════════════════
+     PÁGINA 1 — PORTADA
+     ════════════════════════════════════════════════════════════ -->
+<div class="page page-break">
+  <div class="cover">
+
+    <div class="cover-logo">
+      <svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
+        <rect width="80" height="80" rx="16" fill="#0d1117"/>
+        <rect x="18" y="18" width="44" height="44" rx="6" fill="#161b22" stroke="#3b82f6" stroke-width="3"/>
+        <line x1="5"  y1="30" x2="18" y2="30" stroke="#58a6ff" stroke-width="3" stroke-linecap="round"/>
+        <line x1="5"  y1="40" x2="18" y2="40" stroke="#58a6ff" stroke-width="3" stroke-linecap="round"/>
+        <line x1="5"  y1="50" x2="18" y2="50" stroke="#58a6ff" stroke-width="3" stroke-linecap="round"/>
+        <line x1="62" y1="30" x2="75" y2="30" stroke="#8b5cf6" stroke-width="3" stroke-linecap="round"/>
+        <line x1="62" y1="40" x2="75" y2="40" stroke="#8b5cf6" stroke-width="3" stroke-linecap="round"/>
+        <line x1="62" y1="50" x2="75" y2="50" stroke="#8b5cf6" stroke-width="3" stroke-linecap="round"/>
+        <text x="40" y="47" text-anchor="middle" fill="#e6edf3"
+          font-family="'Courier New',monospace" font-size="18" font-weight="700" letter-spacing="-1">
+          &lt;/&gt;
+        </text>
+      </svg>
+    </div>
+
+    <p class="cover-university">Materia</p>
+    <p class="cover-course">Compiladores</p>
+
+    <h1 class="cover-title">Analizador Léxico</h1>
+    <p class="cover-subtitle">Visualizador Interactivo de Tokens</p>
+
+    <div class="cover-divider"></div>
+
+    <div class="cover-links">
+      <a class="cover-link repo" href="https://github.com/aleosorio22/analizador-lexico" target="_blank">
+        ⌥ github.com/aleosorio22/analizador-lexico
+      </a>
+      <a class="cover-link demo" href="https://aleosorio22.github.io/analizador-lexico/" target="_blank">
+        ◉ aleosorio22.github.io/analizador-lexico
+      </a>
+    </div>
+
+    <div class="cover-meta">
+      <table>
+        <tr>
+          <td>Estudiante</td>
+          <td>Rene Alejandro Osorio</td>
+        </tr>
+        <tr>
+          <td>GitHub</td>
+          <td>@aleosorio22</td>
+        </tr>
+        <tr>
+          <td>Tecnología</td>
+          <td>JavaScript · React · Vite</td>
+        </tr>
+        <tr>
+          <td>Fecha</td>
+          <td>Marzo 2026</td>
+        </tr>
+      </table>
+    </div>
+
+  </div>
+</div>
+
+
+<!-- ════════════════════════════════════════════════════════════
+     PÁGINA 2 — ÍNDICE
+     ════════════════════════════════════════════════════════════ -->
+<div class="page page-break">
+  <p class="toc-title">Tabla de Contenidos</p>
+
+  <ul class="toc-list">
+    <li><a href="#s1">1. Análisis del problema</a><span>3</span></li>
+    <li><a href="#s2">2. Diseño de la solución</a><span>4</span></li>
+    <li><a href="#s3">3. Tokens implementados</a><span>5</span></li>
+    <li><a href="#s4">4. Herramientas utilizadas</a><span>6</span></li>
+    <li><a href="#s5">5. Estructura del proyecto</a><span>7</span></li>
+    <li><a href="#s6">6. Explicación del código</a><span>8</span></li>
+    <li><a href="#s7">7. Interfaz gráfica</a><span>10</span></li>
+    <li><a href="#s8">8. Repositorio y demo en vivo</a><span>12</span></li>
+    <li><a href="#s9">9. Conclusiones</a><span>13</span></li>
+  </ul>
+</div>
+
+
+<!-- ════════════════════════════════════════════════════════════
+     SECCIÓN 1 — ANÁLISIS DEL PROBLEMA
+     ════════════════════════════════════════════════════════════ -->
+<div class="page page-break" id="s1">
+  <div class="section-header">
+    <div class="section-number">1</div>
+    <h2 class="section-title">Análisis del Problema</h2>
+  </div>
+
+  <h3>¿Qué se pide?</h3>
+  <p>
+    El enunciado solicita construir un <strong>Analizador Léxico</strong>: un programa capaz de
+    leer código fuente escrito en cualquier lenguaje de alto nivel e identificar y clasificar
+    cada elemento del texto en categorías llamadas <strong>tokens</strong>.
+  </p>
+  <p>
+    Un analizador léxico es la <strong>primera fase de un compilador</strong>. Antes de que el
+    compilador pueda entender la estructura o el significado de un programa, necesita saber
+    qué tipo de "palabras" lo componen: si una secuencia de caracteres es un número, un nombre
+    de variable, un operador, una palabra reservada, etc.
+  </p>
+
+  <div class="flow">
+    <div class="flow-box">Código fuente<br/><small style="color:#8b949e">texto plano</small></div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-box" style="background:#1e3a5f;">Analizador<br/>Léxico</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-box">Lista de<br/>Tokens</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-box" style="opacity:0.5;">Analizador<br/>Sintáctico<br/><small>(fase siguiente)</small></div>
+  </div>
+
+  <h3>Elementos a reconocer</h3>
+  <p>El enunciado define 8 categorías de tokens que el programa debe ser capaz de identificar:</p>
+  <ol>
+    <li><strong>Identificadores</strong> — nombres de variables o funciones, hasta 10 caracteres.</li>
+    <li><strong>Números enteros sin signo</strong> — solo valores entre 0 y 100.</li>
+    <li><strong>Cadenas de caracteres</strong> — texto entre comillas, asociado a la cadena "asdfg".</li>
+    <li><strong>Operadores aritméticos</strong> — <code>+</code>, <code>-</code>, <code>*</code>, <code>/</code>.</li>
+    <li><strong>Operador de asignación</strong> — <code>:=</code> (estilo Pascal).</li>
+    <li><strong>Operadores relacionales</strong> — <code>&gt;=</code>, <code>&lt;=</code>, <code>&gt;</code>, <code>&lt;</code>, <code>=</code>, <code>&lt;&gt;</code>.</li>
+    <li><strong>Símbolos delimitadores</strong> — <code>{ } [ ] ( ) , ; ..</code></li>
+    <li><strong>Palabras reservadas</strong> — <code>if</code>, <code>else</code>, <code>for</code>, <code>print</code>, <code>int</code>, más todas las permutaciones de "asdfg".</li>
+  </ol>
+
+  <h3>Interpretación del enunciado</h3>
+  <p>
+    Sobre las <em>"combinaciones posibles con la cadena asdfg"</em> como palabras reservadas:
+    interpreté que se refiere a todas las permutaciones de las 5 letras {a, s, d, f, g}.
+    Matemáticamente son <strong>5! = 120 combinaciones únicas</strong> (asdfg, asdgf, adsfg, ...,
+    gfsda, etc.), todas tratadas como palabras reservadas del lenguaje.
+  </p>
+  <p>
+    Sobre <em>"leer un código fuente escrito en cualquier lenguaje de alto nivel"</em>:
+    el analizador acepta cualquier archivo de texto. Clasifica lo que reconoce según las reglas
+    definidas y reporta como <strong>Error</strong> todo lo que no pertenece al lenguaje
+    (caracteres especiales no definidos, identificadores demasiado largos, números fuera de rango).
+  </p>
+
+  <div class="callout info">
+    El analizador <strong>no detiene el análisis al encontrar un error</strong>. Continúa procesando
+    el resto del código, permitiendo detectar múltiples errores en una sola pasada — comportamiento
+    estándar en compiladores reales.
+  </div>
+</div>
+
+
+<!-- ════════════════════════════════════════════════════════════
+     SECCIÓN 2 — DISEÑO DE LA SOLUCIÓN
+     ════════════════════════════════════════════════════════════ -->
+<div class="page page-break" id="s2">
+  <div class="section-header">
+    <div class="section-number">2</div>
+    <h2 class="section-title">Diseño de la Solución</h2>
+  </div>
+
+  <h3>Estrategia: máquina de estados</h3>
+  <p>
+    El analizador implementa una <strong>máquina de estados</strong> que recorre el texto
+    carácter por carácter. En cada posición decide qué tipo de token está comenzando según
+    el carácter actual, delega a un método especializado de lectura, y agrega el token a la
+    lista de resultados.
+  </p>
+
+  <div class="flow" style="flex-direction:column; align-items:flex-start; gap:6px;">
+    <div style="display:flex; align-items:center; gap:12px;">
+      <div class="flow-box" style="min-width:160px;">Leer carácter actual</div>
+      <span style="color:#8b949e; font-size:10pt;">→ determinar tipo</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:12px; margin-left:40px;">
+      <div class="flow-box" style="min-width:160px; background:#1e3a5f;">¿Es letra? → leer palabra</div>
+      <div class="flow-box" style="min-width:160px; background:#1e3a5f;">¿Es dígito? → leer número</div>
+      <div class="flow-box" style="min-width:160px; background:#1e3a5f;">¿Es comilla? → leer cadena</div>
+    </div>
+    <div style="display:flex; align-items:center; gap:12px; margin-left:40px;">
+      <div class="flow-box" style="min-width:160px; background:#2d1b4e;">Verificar palabras<br/>reservadas</div>
+      <div class="flow-box" style="min-width:160px; background:#2d1b4e;">Validar rango<br/>0 a 100</div>
+      <div class="flow-box" style="min-width:160px; background:#2d1b4e;">Detectar cierre<br/>de comilla</div>
+    </div>
+    <div style="display:flex; align-items:center; gap:12px;">
+      <div class="flow-box" style="min-width:530px;">Agregar token a la lista → avanzar → repetir</div>
+    </div>
+  </div>
+
+  <h3>Decisiones de diseño importantes</h3>
+
+  <table>
+    <thead><tr><th>Decisión</th><th>Solución adoptada</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Palabras reservadas base</td>
+        <td>Insensibles a mayúsculas: <code>IF</code>, <code>If</code> e <code>if</code> son equivalentes</td>
+      </tr>
+      <tr>
+        <td>Permutaciones de "asdfg"</td>
+        <td>Sensibles a mayúsculas: solo minúsculas son palabras reservadas</td>
+      </tr>
+      <tr>
+        <td>Operadores de dos caracteres</td>
+        <td>Se usa <em>lookahead</em> (mirar el siguiente carácter) para distinguir <code>&lt;</code> de <code>&lt;=</code> y <code>&lt;&gt;</code></td>
+      </tr>
+      <tr>
+        <td>Comentarios</td>
+        <td>Se ignoran (<code>//</code>, <code>#</code>, <code>/* */</code>) para soportar múltiples lenguajes fuente</td>
+      </tr>
+      <tr>
+        <td>Número fuera de rango</td>
+        <td>Se reporta como Error con el valor encontrado para facilitar la depuración</td>
+      </tr>
+      <tr>
+        <td>Cadenas sin cerrar</td>
+        <td>Se reporta Error si la cadena llega a fin de línea sin comilla de cierre</td>
+      </tr>
+      <tr>
+        <td>Seguimiento de posición</td>
+        <td>Cada token guarda número de línea, posición inicial y final en el texto</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+
+<!-- ════════════════════════════════════════════════════════════
+     SECCIÓN 3 — TOKENS IMPLEMENTADOS
+     ════════════════════════════════════════════════════════════ -->
+<div class="page page-break" id="s3">
+  <div class="section-header">
+    <div class="section-number">3</div>
+    <h2 class="section-title">Tokens Implementados</h2>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Tipo</th>
+        <th>Regla</th>
+        <th>Ejemplos válidos</th>
+        <th>Error si...</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="token-badge tk-res">Palabra reservada</span></td>
+        <td>Coincide con la lista de reservadas</td>
+        <td><code>if</code>, <code>for</code>, <code>asdfg</code>, <code>fgads</code></td>
+        <td>—</td>
+      </tr>
+      <tr>
+        <td><span class="token-badge tk-id">Identificador</span></td>
+        <td>Inicia con letra, resto letras/dígitos, máx. 10 chars</td>
+        <td><code>x</code>, <code>var1</code>, <code>resultado</code></td>
+        <td>Más de 10 caracteres</td>
+      </tr>
+      <tr>
+        <td><span class="token-badge tk-int">Número entero</span></td>
+        <td>Solo dígitos, valor entre 0 y 100</td>
+        <td><code>0</code>, <code>50</code>, <code>100</code></td>
+        <td>Valor > 100</td>
+      </tr>
+      <tr>
+        <td><span class="token-badge tk-str">Cadena</span></td>
+        <td>Texto entre <code>"..."</code> o <code>'...'</code></td>
+        <td><code>"asdfg"</code>, <code>"hola"</code></td>
+        <td>Sin comilla de cierre</td>
+      </tr>
+      <tr>
+        <td><span class="token-badge tk-ari">Op. aritmético</span></td>
+        <td>Un solo carácter</td>
+        <td><code>+</code>, <code>-</code>, <code>*</code>, <code>/</code></td>
+        <td>—</td>
+      </tr>
+      <tr>
+        <td><span class="token-badge tk-asn">Op. asignación</span></td>
+        <td>Dos caracteres: dos puntos + igual</td>
+        <td><code>:=</code></td>
+        <td><code>:</code> solo (sin <code>=</code>)</td>
+      </tr>
+      <tr>
+        <td><span class="token-badge tk-rel">Op. relacional</span></td>
+        <td>Comparación, uno o dos caracteres</td>
+        <td><code>&gt;</code>, <code>&lt;=</code>, <code>&lt;&gt;</code>, <code>=</code></td>
+        <td>—</td>
+      </tr>
+      <tr>
+        <td><span class="token-badge tk-sym">Símbolo</span></td>
+        <td>Delimitadores y separadores</td>
+        <td><code>{</code>, <code>}</code>, <code>[</code>, <code>]</code>, <code>(</code>, <code>)</code>, <code>,</code>, <code>;</code>, <code>..</code></td>
+        <td><code>.</code> solo (sin segundo punto)</td>
+      </tr>
+      <tr>
+        <td><span class="token-badge tk-err">Error</span></td>
+        <td>Cualquier construcción inválida</td>
+        <td><code>@</code>, <code>variableLarga</code>, <code>999</code></td>
+        <td>—</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Las 120 palabras reservadas de "asdfg"</h3>
+  <p>
+    Se generan en tiempo de ejecución calculando todas las permutaciones del conjunto
+    de letras {a, s, d, f, g} usando un algoritmo recursivo:
+  </p>
+  <pre><code><span class="kw">function*</span> <span class="fn">permutations</span>(arr) {
+  <span class="kw">if</span> (arr.length <span class="op">&lt;=</span> <span class="nb">1</span>) { <span class="kw">yield</span> arr; <span class="kw">return</span> }
+  <span class="kw">for</span> (<span class="kw">let</span> i = <span class="nb">0</span>; i <span class="op">&lt;</span> arr.length; i++) {
+    <span class="kw">const</span> rest = [...arr.slice(<span class="nb">0</span>, i), ...arr.slice(i <span class="op">+</span> <span class="nb">1</span>)]
+    <span class="kw">for</span> (<span class="kw">const</span> perm <span class="kw">of</span> <span class="fn">permutations</span>(rest)) <span class="kw">yield</span> [arr[i], ...perm]
+  }
+}
+
+<span class="cm">// Genera: asdfg, asdgf, adsfg, adgfs, ... (120 en total)</span>
+<span class="kw">const</span> ASDFG_PERMS = <span class="kw">new</span> <span class="fn">Set</span>(
+  [...<span class="fn">permutations</span>([...<span class="str">'asdfg'</span>])].map(p => p.join(<span class="str">''</span>))
+)</code></pre>
+</div>
+
+
+<!-- ════════════════════════════════════════════════════════════
+     SECCIÓN 4 — HERRAMIENTAS
+     ════════════════════════════════════════════════════════════ -->
+<div class="page page-break" id="s4">
+  <div class="section-header">
+    <div class="section-number">4</div>
+    <h2 class="section-title">Herramientas Utilizadas</h2>
+  </div>
+
+  <table>
+    <thead><tr><th>Herramienta</th><th>Versión</th><th>Rol en el proyecto</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>JavaScript</strong></td>
+        <td>ES2022+</td>
+        <td>Lenguaje base. Toda la lógica del analizador léxico está implementada en JS puro, sin dependencias externas.</td>
+      </tr>
+      <tr>
+        <td><strong>React</strong></td>
+        <td>18.2</td>
+        <td>Librería de interfaz gráfica. Permite construir la UI de forma declarativa con componentes reutilizables.</td>
+      </tr>
+      <tr>
+        <td><strong>Vite</strong></td>
+        <td>5.0</td>
+        <td>Herramienta de build y servidor de desarrollo. Compilación instantánea y hot-reload.</td>
+      </tr>
+      <tr>
+        <td><strong>CSS puro</strong></td>
+        <td>—</td>
+        <td>Todos los estilos son CSS propio, sin librerías de UI externas (Bootstrap, Tailwind, etc.).</td>
+      </tr>
+      <tr>
+        <td><strong>GitHub</strong></td>
+        <td>—</td>
+        <td>Repositorio de código fuente, control de versiones.</td>
+      </tr>
+      <tr>
+        <td><strong>GitHub Actions</strong></td>
+        <td>—</td>
+        <td>CI/CD: construye y publica la app automáticamente en cada push a la rama <code>main</code>.</td>
+      </tr>
+      <tr>
+        <td><strong>GitHub Pages</strong></td>
+        <td>—</td>
+        <td>Hosting gratuito de la aplicación. URL pública accesible desde cualquier dispositivo.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>¿Por qué React + Vite?</h3>
+  <p>
+    El enunciado permite usar cualquier herramienta de desarrollo. Se eligió React + Vite
+    porque permiten construir una <strong>interfaz visual interactiva</strong> que va más allá
+    de imprimir tokens en consola:
+  </p>
+  <ul>
+    <li>El código fuente se resalta en colores según el tipo de cada token</li>
+    <li>Los tokens se pueden filtrar por categoría en tiempo real</li>
+    <li>El hover entre código y lista de tokens es bidireccional</li>
+    <li>Se puede acceder desde cualquier navegador sin instalar nada</li>
+  </ul>
+
+  <div class="callout success">
+    La lógica del analizador léxico (<code>lexer.js</code>) está completamente separada de la
+    interfaz. Es JavaScript puro que podría usarse en cualquier entorno: Node.js, navegador,
+    o como módulo en otro proyecto.
+  </div>
+</div>
+
+
+<!-- ════════════════════════════════════════════════════════════
+     SECCIÓN 5 — ESTRUCTURA DEL PROYECTO
+     ════════════════════════════════════════════════════════════ -->
+<div class="page page-break" id="s5">
+  <div class="section-header">
+    <div class="section-number">5</div>
+    <h2 class="section-title">Estructura del Proyecto</h2>
+  </div>
+
+  <pre><code>analizador-lexico/
+├── <span class="kw">.github/</span>
+│   └── workflows/
+│       └── <span class="str">deploy.yml</span>       <span class="cm"># GitHub Actions: build y deploy automático</span>
+│
+├── <span class="kw">public/</span>
+│   └── <span class="str">favicon.svg</span>          <span class="cm"># Ícono del compilador (chip con &lt;/&gt;)</span>
+│
+├── <span class="kw">src/</span>
+│   ├── <span class="fn">lexer.js</span>             <span class="cm"># ★ Núcleo: toda la lógica del analizador léxico</span>
+│   ├── <span class="fn">App.jsx</span>              <span class="cm"># Interfaz principal (layout, estado, interacción)</span>
+│   ├── <span class="fn">App.css</span>              <span class="cm"># Estilos — tema oscuro tipo VS Code</span>
+│   ├── <span class="fn">Docs.jsx</span>             <span class="cm"># Modal de documentación del lenguaje</span>
+│   └── <span class="fn">main.jsx</span>             <span class="cm"># Punto de entrada de React</span>
+│
+├── <span class="str">index.html</span>               <span class="cm"># Documento HTML raíz</span>
+├── <span class="str">vite.config.js</span>           <span class="cm"># Configuración de Vite (base URL para GitHub Pages)</span>
+├── <span class="str">package.json</span>             <span class="cm"># Dependencias del proyecto</span>
+└── <span class="str">README.md</span>                <span class="cm"># Documentación del repositorio</span></code></pre>
+
+  <h3>Responsabilidades de cada archivo</h3>
+
+  <table>
+    <thead><tr><th>Archivo</th><th>Responsabilidad</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>lexer.js</code></td>
+        <td>
+          Contiene la clase <code>AnalizadorLexico</code>, las definiciones de tipos de token,
+          los colores por tipo, las 120 permutaciones de "asdfg", y la función <code>buildSegments()</code>
+          que mapea tokens a posiciones del texto para el resaltado.
+        </td>
+      </tr>
+      <tr>
+        <td><code>App.jsx</code></td>
+        <td>
+          Componente raíz de la interfaz. Gestiona el estado global (código fuente, tokens,
+          filtros activos, token en hover). Renderiza el panel del editor y el panel de tokens.
+        </td>
+      </tr>
+      <tr>
+        <td><code>Docs.jsx</code></td>
+        <td>
+          Modal con documentación completa del lenguaje: tablas de tokens, ejemplos válidos
+          e inválidos, lista de palabras reservadas, programa de ejemplo.
+        </td>
+      </tr>
+      <tr>
+        <td><code>deploy.yml</code></td>
+        <td>
+          Workflow de GitHub Actions. Se dispara en cada push a <code>main</code>:
+          instala dependencias, compila la app y la publica en GitHub Pages.
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+
+<!-- ════════════════════════════════════════════════════════════
+     SECCIÓN 6 — EXPLICACIÓN DEL CÓDIGO
+     ════════════════════════════════════════════════════════════ -->
+<div class="page page-break" id="s6">
+  <div class="section-header">
+    <div class="section-number">6</div>
+    <h2 class="section-title">Explicación del Código</h2>
+  </div>
+
+  <h3>6.1 — Estructura del analizador (<code>lexer.js</code>)</h3>
+  <p>El analizador es una clase con tres grupos de métodos:</p>
+
+  <pre><code><span class="kw">class</span> <span class="fn">AnalizadorLexico</span> {
+  <span class="kw">constructor</span>(source) {
+    <span class="kw">this</span>.src    = source  <span class="cm">// código fuente completo</span>
+    <span class="kw">this</span>.pos    = <span class="nb">0</span>       <span class="cm">// posición actual en el texto</span>
+    <span class="kw">this</span>.line   = <span class="nb">1</span>       <span class="cm">// número de línea (para reportes)</span>
+    <span class="kw">this</span>.tokens = []      <span class="cm">// lista de tokens encontrados</span>
+  }
+
+  <span class="cm">// Grupo 1: acceso al texto (sin modificar estado)</span>
+  <span class="fn">_ch</span>()    { ... }   <span class="cm">// carácter actual</span>
+  <span class="fn">_peek</span>() { ... }   <span class="cm">// mirar adelante (lookahead)</span>
+  <span class="fn">_advance</span>() { ... } <span class="cm">// consumir carácter y avanzar</span>
+
+  <span class="cm">// Grupo 2: saltear texto sin significado</span>
+  <span class="fn">_skipBlanks</span>() { ... }  <span class="cm">// espacios + comentarios</span>
+
+  <span class="cm">// Grupo 3: leer un token específico</span>
+  <span class="fn">_readWord</span>()   { ... }  <span class="cm">// identificadores y reservadas</span>
+  <span class="fn">_readNumber</span>() { ... }  <span class="cm">// números enteros</span>
+  <span class="fn">_readString</span>() { ... }  <span class="cm">// cadenas entre comillas</span>
+
+  <span class="cm">// Método principal</span>
+  <span class="fn">analyze</span>() { ... }      <span class="cm">// recorre el fuente y produce tokens</span>
+}</code></pre>
+
+  <h3>6.2 — Lookahead para operadores de dos caracteres</h3>
+  <p>
+    Para distinguir <code>&lt;</code>, <code>&lt;=</code> y <code>&lt;&gt;</code> se usa
+    el método <code>_peek()</code> que "mira" el siguiente carácter sin consumirlo:
+  </p>
+  <pre><code><span class="kw">if</span> (ch <span class="op">===</span> <span class="str">'&lt;'</span>) {
+  <span class="kw">const</span> sig = <span class="kw">this</span>.<span class="fn">_peek</span>()
+  <span class="kw">if</span>      (sig <span class="op">===</span> <span class="str">'='</span>)  { <span class="cm">/* consume dos: &lt;= */</span> }
+  <span class="kw">else if</span> (sig <span class="op">===</span> <span class="str">'&gt;'</span>)  { <span class="cm">/* consume dos: &lt;&gt; */</span> }
+  <span class="kw">else</span>                   { <span class="cm">/* consume uno:  &lt;  */</span> }
+}</code></pre>
+
+  <h3>6.3 — Validación de identificadores</h3>
+  <pre><code><span class="fn">_readWord</span>(startPos) {
+  <span class="kw">let</span> word = <span class="str">''</span>
+  <span class="kw">while</span> (letra_o_digito(this.<span class="fn">_ch</span>())) word += <span class="kw">this</span>.<span class="fn">_advance</span>()
+
+  <span class="kw">if</span> (word.length <span class="op">&gt;</span> <span class="nb">10</span>)
+    <span class="kw">return</span> <span class="kw">this</span>.<span class="fn">_add</span>(TK.ERROR, <span class="str">`identificador demasiado largo: "${word}"`</span>, startPos)
+
+  <span class="kw">if</span> (BASE_RESERVED.has(word.toLowerCase()))
+    <span class="kw">return</span> <span class="kw">this</span>.<span class="fn">_add</span>(TK.RESERVED, word.toLowerCase(), startPos)
+
+  <span class="kw">if</span> (ASDFG_PERMS.has(word))
+    <span class="kw">return</span> <span class="kw">this</span>.<span class="fn">_add</span>(TK.RESERVED, word, startPos)
+
+  <span class="kw">this</span>.<span class="fn">_add</span>(TK.IDENTIFIER, word, startPos)
+}</code></pre>
+
+  <h3>6.4 — Resaltado del código fuente</h3>
+  <p>
+    La función <code>buildSegments()</code> convierte la lista de tokens en segmentos del texto,
+    que React luego renderiza como <code>&lt;span&gt;</code> con colores según el tipo de token:
+  </p>
+  <pre><code><span class="kw">export function</span> <span class="fn">buildSegments</span>(source, tokens) {
+  <span class="kw">const</span> sorted = [...tokens].sort((a, b) => a.startPos <span class="op">-</span> b.startPos)
+  <span class="kw">let</span> last = <span class="nb">0</span>, segments = []
+
+  <span class="kw">for</span> (<span class="kw">const</span> tok <span class="kw">of</span> sorted) {
+    <span class="kw">if</span> (tok.startPos <span class="op">&gt;</span> last)  <span class="cm">// texto entre tokens (espacios)</span>
+      segments.push({ text: source.slice(last, tok.startPos), token: <span class="nb">null</span> })
+    segments.push({ text: source.slice(tok.startPos, tok.endPos), token: tok })
+    last = tok.endPos
+  }
+  <span class="kw">return</span> segments
+}</code></pre>
+</div>
+
+
+<!-- ════════════════════════════════════════════════════════════
+     SECCIÓN 7 — INTERFAZ GRÁFICA
+     ════════════════════════════════════════════════════════════ -->
+<div class="page page-break" id="s7">
+  <div class="section-header">
+    <div class="section-number">7</div>
+    <h2 class="section-title">Interfaz Gráfica</h2>
+  </div>
+
+  <p>
+    La interfaz está dividida en tres áreas principales con un tema oscuro inspirado en
+    editores de código profesionales como VS Code:
+  </p>
+
+  <h3>7.1 — Vista principal</h3>
+
+  <div class="screenshot">
+    <img src="capturas/01-interfaz-principal.png" alt="Interfaz principal" onerror="this.parentElement.innerHTML='<div class=\'screenshot-placeholder\'><p>📸 captura: <strong>01-interfaz-principal.png</strong><br>Vista general de la aplicación antes de analizar</p></div>'"/>
+  </div>
+  <p class="screenshot-caption">Fig. 1 — Interfaz principal con el código de ejemplo precargado</p>
+
+  <p>Componentes visibles:</p>
+  <ul>
+    <li><strong>Header</strong> — Logo del compilador (chip SVG), título, nombre del autor, link a GitHub y botones de acción</li>
+    <li><strong>Barra de información</strong> — Muestra cuántas palabras reservadas hay (125 en total)</li>
+    <li><strong>Panel izquierdo</strong> — Editor de código con números de línea sincronizados</li>
+    <li><strong>Panel derecho</strong> — Lista de tokens (vacía antes del análisis)</li>
+  </ul>
+
+  <h3>7.2 — Resultado del análisis con tokens resaltados</h3>
+
+  <div class="screenshot">
+    <img src="capturas/02-tokens-resaltados.png" alt="Tokens resaltados" onerror="this.parentElement.innerHTML='<div class=\'screenshot-placeholder\'><p>📸 captura: <strong>02-tokens-resaltados.png</strong><br>Vista del código con tokens coloreados y lista de tokens a la derecha</p></div>'"/>
+  </div>
+  <p class="screenshot-caption">Fig. 2 — Código fuente con tokens resaltados por color y lista de tokens detectados</p>
+
+  <p>Cada tipo de token tiene un color único:</p>
+  <table>
+    <thead><tr><th>Color</th><th>Tipo</th></tr></thead>
+    <tbody>
+      <tr><td><span class="token-badge tk-res">Violeta</span></td><td>Palabras reservadas</td></tr>
+      <tr><td><span class="token-badge tk-id">Azul</span></td><td>Identificadores</td></tr>
+      <tr><td><span class="token-badge tk-int">Verde</span></td><td>Números enteros</td></tr>
+      <tr><td><span class="token-badge tk-str">Ámbar</span></td><td>Cadenas de caracteres</td></tr>
+      <tr><td><span class="token-badge tk-ari">Naranja</span></td><td>Operadores aritméticos</td></tr>
+      <tr><td><span class="token-badge tk-asn">Índigo</span></td><td>Operador de asignación</td></tr>
+      <tr><td><span class="token-badge tk-rel">Cian</span></td><td>Operadores relacionales</td></tr>
+      <tr><td><span class="token-badge tk-sym">Gris</span></td><td>Símbolos</td></tr>
+      <tr><td><span class="token-badge tk-err">Rojo</span></td><td>Errores léxicos</td></tr>
+    </tbody>
+  </table>
+
+  <h3>7.3 — Detección de errores y filtros</h3>
+
+  <div class="screenshot">
+    <img src="capturas/03-errores-filtros.png" alt="Errores y filtros" onerror="this.parentElement.innerHTML='<div class=\'screenshot-placeholder\'><p>📸 captura: <strong>03-errores-filtros.png</strong><br>Filtro de errores activo mostrando solo los tokens de tipo Error</p></div>'"/>
+  </div>
+  <p class="screenshot-caption">Fig. 3 — Filtro de errores activo: identificador largo, número fuera de rango, carácter inválido</p>
+
+  <h3>7.4 — Modal de documentación</h3>
+
+  <div class="screenshot">
+    <img src="capturas/04-documentacion.png" alt="Modal de documentación" onerror="this.parentElement.innerHTML='<div class=\'screenshot-placeholder\'><p>📸 captura: <strong>04-documentacion.png</strong><br>Modal de documentación abierto mostrando la referencia de la sintaxis</p></div>'"/>
+  </div>
+  <p class="screenshot-caption">Fig. 4 — Documentación integrada con referencia completa de la sintaxis del lenguaje</p>
+</div>
+
+
+<!-- ════════════════════════════════════════════════════════════
+     SECCIÓN 8 — REPOSITORIO Y DEMO
+     ════════════════════════════════════════════════════════════ -->
+<div class="page page-break" id="s8">
+  <div class="section-header">
+    <div class="section-number">8</div>
+    <h2 class="section-title">Repositorio y Demo en Vivo</h2>
+  </div>
+
+  <h3>Repositorio en GitHub</h3>
+  <div class="callout info" style="font-size:11pt;">
+    🔗 <strong><a href="https://github.com/aleosorio22/analizador-lexico" style="color:#1d4ed8;">
+      https://github.com/aleosorio22/analizador-lexico
+    </a></strong>
+  </div>
+  <p>El repositorio contiene:</p>
+  <ul>
+    <li>Todo el código fuente del proyecto</li>
+    <li>El workflow de GitHub Actions para deploy automático</li>
+    <li>El README con descripción, tabla de tokens e instrucciones</li>
+    <li>Historial de commits documentado</li>
+  </ul>
+
+  <h3>Demo en vivo — GitHub Pages</h3>
+  <div class="callout success" style="font-size:11pt;">
+    ◉ <strong><a href="https://aleosorio22.github.io/analizador-lexico/" style="color:#065f46;">
+      https://aleosorio22.github.io/analizador-lexico/
+    </a></strong>
+  </div>
+  <p>
+    La aplicación está publicada en GitHub Pages y es accesible desde cualquier navegador sin
+    necesidad de instalar nada. El deploy es automático: cada vez que se sube código nuevo
+    a la rama <code>main</code>, GitHub Actions construye y publica la nueva versión.
+  </p>
+
+  <h3>Pipeline de CI/CD</h3>
+  <pre><code><span class="cm"># .github/workflows/deploy.yml</span>
+<span class="kw">on:</span>
+  push:
+    branches: [main]   <span class="cm"># se activa en cada push</span>
+
+jobs:
+  build:
+    - npm ci            <span class="cm"># instala dependencias</span>
+    - npm run build     <span class="cm"># compila la app</span>
+    - upload-artifact   <span class="cm"># sube el build a Actions</span>
+
+  deploy:
+    - deploy-pages      <span class="cm"># publica en GitHub Pages</span></code></pre>
+
+  <h3>Instrucciones para correr localmente</h3>
+  <pre><code><span class="cm"># Clonar el repositorio</span>
+git clone https://github.com/aleosorio22/analizador-lexico.git
+cd analizador-lexico
+
+<span class="cm"># Instalar dependencias</span>
+npm install
+
+<span class="cm"># Iniciar servidor de desarrollo</span>
+npm run dev
+<span class="cm"># → http://localhost:5173</span></code></pre>
+</div>
+
+
+<!-- ════════════════════════════════════════════════════════════
+     SECCIÓN 9 — CONCLUSIONES
+     ════════════════════════════════════════════════════════════ -->
+<div class="page" id="s9">
+  <div class="section-header">
+    <div class="section-number">9</div>
+    <h2 class="section-title">Conclusiones</h2>
+  </div>
+
+  <p>
+    El analizador léxico desarrollado cumple con todos los requerimientos del enunciado:
+    reconoce los 9 tipos de token definidos, reporta errores léxicos con detalle, procesa
+    código fuente de cualquier lenguaje de alto nivel y produce un listado completo de los
+    tokens detectados.
+  </p>
+
+  <p>
+    Ir más allá de la salida en consola y construir una interfaz visual permitió entender
+    mejor el funcionamiento del analizador: ver el código fuente coloreado en tiempo real
+    hace evidente cómo el lexer "ve" el texto — no como líneas de código, sino como una
+    secuencia de categorías semánticas.
+  </p>
+
+  <p>
+    Algunos aspectos relevantes del aprendizaje:</p>
+  <ul>
+    <li>
+      El uso de <strong>lookahead</strong> es esencial para operadores de dos caracteres
+      como <code>:=</code>, <code>&lt;=</code>, <code>&lt;&gt;</code> y <code>..</code>
+    </li>
+    <li>
+      Las <strong>120 palabras reservadas</strong> generadas por permutación demuestran que
+      el vocabulario de un lenguaje puede ser matemáticamente extenso, aunque en la práctica
+      la mayoría de los lenguajes tienen menos de 50 palabras reservadas
+    </li>
+    <li>
+      Separar la <strong>lógica del analizador</strong> de la interfaz gráfica es una práctica
+      de ingeniería importante: el archivo <code>lexer.js</code> podría usarse como módulo
+      en la siguiente fase (analizador sintáctico) sin cambiar nada
+    </li>
+    <li>
+      El <strong>deploy continuo</strong> con GitHub Actions es una herramienta práctica que
+      todo proyecto de software debería tener desde el inicio
+    </li>
+  </ul>
+
+  <div class="callout success">
+    El proyecto está disponible públicamente en
+    <a href="https://aleosorio22.github.io/analizador-lexico/" style="color:#065f46; font-weight:bold;">
+      aleosorio22.github.io/analizador-lexico
+    </a>
+    y puede ser inspeccionado, probado y extendido para la siguiente etapa de la materia.
+  </div>
+
+  <div style="margin-top: 60px; text-align:right; color:#888; font-size:9.5pt; border-top:1px solid #e5e7eb; padding-top:16px;">
+    Rene Alejandro Osorio · @aleosorio22 · Compiladores · Marzo 2026
+  </div>
+</div>
+
+</body>
+</html>
