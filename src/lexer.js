@@ -159,12 +159,22 @@ class AnalizadorLexico {
             break
 
           case 'number': {
-            const val = parseInt(raw, 10)
-            this._consume(raw.length)
-            if (val >= 0 && val <= 100)
-              this._push(TK.INTEGER, raw, start)
-            else
-              this._push(TK.ERROR, `número fuera de rango 0–100: ${raw}`, start)
+            // Verificar si inmediatamente después hay una letra → token inválido (ej: "1a", "42xyz")
+            const afterNum = this.src.slice(this.pos + raw.length)
+            const nextIsLetter = /^[a-zA-ZáéíóúÁÉÍÓÚñÑ_]/.test(afterNum)
+            if (nextIsLetter) {
+              // Consumir dígitos + letras juntos como un token de error
+              const fullMatch = rest.match(/^\d+[a-zA-ZáéíóúÁÉÍÓÚñÑ_][a-zA-ZáéíóúÁÉÍÓÚñÑ0-9_]*/)[0]
+              this._consume(fullMatch.length)
+              this._push(TK.ERROR, `token inválido: "${fullMatch}"`, start)
+            } else {
+              const val = parseInt(raw, 10)
+              this._consume(raw.length)
+              if (val >= 0 && val <= 100)
+                this._push(TK.INTEGER, raw, start)
+              else
+                this._push(TK.ERROR, `número fuera de rango 0–100: ${raw}`, start)
+            }
             break
           }
 
