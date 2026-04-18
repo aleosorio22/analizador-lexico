@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef } from 'react'
 import { analyze, buildSegments, TK, TOKEN_COLORS, RESERVED_WORDS, ASDFG_PERMS_COUNT } from './lexer.js'
 import Docs from './Docs.jsx'
+import BNFModal from './BNFModal.jsx'
 
 // ── Código de ejemplo precargado ─────────────────────────────────
 const SAMPLE_CODE = `// ============================================
@@ -120,6 +121,7 @@ export default function App() {
   const [hoveredIdx, setHoveredIdx] = useState(null)
   const [activeTab, setActiveTab]   = useState('tokens')   // 'tokens' | 'code'
   const [showDocs, setShowDocs]     = useState(false)
+  const [showBNF,  setShowBNF]      = useState(false)
   const tokenListRef  = useRef(null)
   const lineNumsRef   = useRef(null)   // div con números de línea
   const textareaRef   = useRef(null)
@@ -181,6 +183,7 @@ export default function App() {
   return (
     <div className="app">
       {showDocs && <Docs onClose={() => setShowDocs(false)} />}
+      {showBNF  && <BNFModal onClose={() => setShowBNF(false)} mainSource={source} />}
       {/* ── HEADER ── */}
       <header className="header">
         <div className="header-left">
@@ -260,6 +263,7 @@ export default function App() {
         <div className="header-actions">
           <button className="btn btn-ghost" onClick={handleSample}>Código de ejemplo</button>
           <button className="btn btn-ghost" onClick={handleClear}>Limpiar</button>
+          <button className="btn btn-bnf"  onClick={() => setShowBNF(true)}>⊢ BNF / Árbol</button>
           <button className="btn btn-docs" onClick={() => setShowDocs(true)}>? Documentación</button>
           <button className="btn btn-primary" onClick={handleAnalyze}>
             ▶ Analizar
